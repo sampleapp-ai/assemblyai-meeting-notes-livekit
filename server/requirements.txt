@@ -1,0 +1,2 @@
+livekit-agents[assemblyai,openai,silero,rime]
+python-dotenv
