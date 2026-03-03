@@ -59,7 +59,7 @@ The `MeetingFacilitator` class extends LiveKit's `Agent` base class and passes t
 
 The `entrypoint` function is the core of the agent. After connecting to the LiveKit room, it sets up each component:
 
-**STT (AssemblyAI U3P):** Configured with meeting-balanced turn detection — `min_turn_silence=560` waits 560ms after detecting terminal punctuation before ending a turn, and `max_turn_silence=2000` forces a turn end after 2 seconds. These relaxed thresholds (vs. the 100ms/1200ms used in voice agents) avoid cutting off speakers mid-thought during longer meeting discussions.
+**STT (AssemblyAI U3P):** Configured with responsive turn detection — `min_turn_silence=100` checks for terminal punctuation after just 100ms of silence, and `max_turn_silence=1000` forces a turn end after 1 second. `vad_threshold=0.3` with a matching `activation_threshold=0.3` on the VAD and `min_endpointing_delay=0` ensure the agent responds quickly. These aggressive thresholds keep the conversation snappy while U3P's punctuation-based detection prevents mid-sentence cutoffs.
 
 **LLM (Cerebras):** Uses `llama3.1-8b` via the OpenAI-compatible API wrapper with a temperature of 0.7 for natural-sounding responses.
 
@@ -97,7 +97,7 @@ The client connects to LiveKit with both `audio={true}` and `video={true}`, enab
 
 **Live caption bar:** Shows the most recent transcription line in a Zoom-style closed-captions overlay with color-coded speaker labels.
 
-**Transcript panel:** A scrolling log of all finalized messages from both the user and AI, sorted chronologically. The `buildConversation` helper merges `agentTranscriptions` (from `useVoiceAssistant()`) and `userSegments` (from `useTrackTranscription()`) into a single timeline.
+**Transcript panel:** A scrolling log of all messages from both the user and AI, sorted chronologically. Partial (interim) transcripts appear dimmed in gray as the user speaks, then update in place when finalized. The `buildConversation` helper merges `agentTranscriptions` (from `useVoiceAssistant()`) and `userSegments` (from a custom `useUserTranscription` hook that listens to `RoomEvent.TranscriptionReceived`) into a single timeline.
 
 **Control bar:** Mic toggle, camera toggle, and "End Meeting" button using `localParticipant.setMicrophoneEnabled()` / `setCameraEnabled()` from the LiveKit SDK.
 

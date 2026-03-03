@@ -59,8 +59,9 @@ async def entrypoint(ctx: agents.JobContext):
     session = AgentSession(
         stt=assemblyai.STT(
             model="u3-rt-pro",
-            min_turn_silence=560,
-            max_turn_silence=2000,
+            min_turn_silence=100,
+            max_turn_silence=1000,
+            vad_threshold=0.3,
             keyterms_prompt=KEYTERMS,
         ),
         llm=openai.LLM.with_cerebras(
@@ -73,8 +74,11 @@ async def entrypoint(ctx: agents.JobContext):
             speed_alpha=1.0,
             reduce_latency=True,
         ),
-        vad=silero.VAD.load(),
+        vad=silero.VAD.load(
+            activation_threshold=0.3,
+        ),
         turn_detection="stt",
+        min_endpointing_delay=0,
     )
 
     await session.start(

@@ -5,11 +5,11 @@ import {
   LiveKitRoom,
   useVoiceAssistant,
   RoomAudioRenderer,
-  useTrackTranscription,
   useLocalParticipant,
+  useRoomContext,
   VideoTrack,
 } from "@livekit/components-react";
-import { Track } from "livekit-client";
+import { Track, RoomEvent, type TranscriptionSegment as LKTranscriptionSegment } from "livekit-client";
 
 type AppState = "idle" | "recording" | "generating" | "notes";
 
@@ -197,6 +197,48 @@ function useAudioLevel(
   return level;
 }
 
+// ── User transcription via RoomEvent (replaces useTrackTranscription) ──
+
+function useUserTranscription(): Segment[] {
+  const room = useRoomContext();
+  const [segments, setSegments] = useState<Segment[]>([]);
+
+  useEffect(() => {
+    const handler = (
+      newSegments: LKTranscriptionSegment[],
+      participant: any,
+    ) => {
+      // Only process transcriptions for the local participant's mic
+      if (participant?.identity !== room.localParticipant.identity) return;
+
+      setSegments((prev) => {
+        const updated = [...prev];
+        for (const seg of newSegments) {
+          const idx = updated.findIndex((s) => s.id === seg.id);
+          if (idx >= 0) {
+            updated[idx] = { ...updated[idx], text: seg.text, final: seg.final };
+          } else {
+            updated.push({
+              id: seg.id,
+              text: seg.text,
+              firstReceivedTime: seg.firstReceivedTime,
+              final: seg.final,
+            });
+          }
+        }
+        return updated;
+      });
+    };
+
+    room.on(RoomEvent.TranscriptionReceived, handler);
+    return () => {
+      room.off(RoomEvent.TranscriptionReceived, handler);
+    };
+  }, [room]);
+
+  return segments;
+}
+
 // ── Build merged conversation ──────────────────────────────
 
 interface Message {
@@ -262,18 +304,8 @@ function MeetingView({
   const [micMuted, setMicMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
 
-  // Get user's mic track for transcription
-  const localMicTrack = localParticipant.getTrackPublications().find(
-    (pub) => pub.track?.source === Track.Source.Microphone
-  );
-  const micTrackRef = localMicTrack
-    ? {
-        participant: localParticipant,
-        publication: localMicTrack,
-        source: Track.Source.Microphone,
-      }
-    : undefined;
-  const { segments: userSegments } = useTrackTranscription(micTrackRef);
+  // Get user transcription via RoomEvent listener
+  const userSegments = useUserTranscription();
 
   // Get user's camera track
   const localCamTrack = localParticipant.getTrackPublications().find(
@@ -442,9 +474,7 @@ function TranscriptPanel({ messages }: { messages: Message[] }) {
 
   return (
     <div ref={scrollRef} className="transcript-panel scrollbar-thin">
-      {messages
-        .filter((m) => m.final)
-        .map((msg, i) => (
+      {messages.map((msg, i) => (
           <div key={i} className="transcript-row">
             <span className="transcript-row__time">
               {formatTimestamp(msg.timestamp)}
@@ -458,7 +488,7 @@ function TranscriptPanel({ messages }: { messages: Message[] }) {
             >
               {msg.role === "user" ? "You" : "AI Notetaker"}
             </span>
-            <span className="transcript-row__text">{msg.text}</span>
+            <span className={`transcript-row__text${!msg.final ? " transcript-row__text--partial" : ""}`}>{msg.text}</span>
           </div>
         ))}
     </div>
