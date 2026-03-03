@@ -1,0 +1,122 @@
+# Build AI Meeting Notes with LiveKit and AssemblyAI Universal-3 Pro
+
+Build a Zoom-inspired video meeting app with an AI notetaker that joins as a visible participant, transcribes speech in real-time using AssemblyAI Universal-3 Pro, responds via voice, and generates structured meeting notes when the session ends.
+
+<downloadandopenbuttons
+  downloadurl="/public/guardian/assemblyai/livekit-meeting-notes.zip"
+  themecolor="#0000FF"
+/>
+
+### ❶ Install dependencies
+
+<codefocussection filepath="server/requirements.txt" filerange="1-2" title="Python dependencies" themeColor="#0000FF" label="Server">
+
+Install the LiveKit Agents SDK with plugins for each service: AssemblyAI for speech-to-text, OpenAI-compatible client for the Cerebras LLM, Rime for text-to-speech, and Silero for voice activity detection. Also install `python-dotenv` for environment variable loading.
+
+```bash
+pip install "livekit-agents[assemblyai,openai,silero,rime]" python-dotenv
+```
+
+</codefocussection>
+
+### ❷ Configure API keys
+
+<codefocussection filepath="server/.env.example" filerange="1-5" title="Environment variables template" themeColor="#0000FF" label="Server">
+
+Create a `.env` file with your API keys. You'll need keys for [AssemblyAI](https://www.assemblyai.com/) (speech-to-text), [Cerebras](https://cloud.cerebras.ai/) (LLM), [Rime](https://rime.ai/) (text-to-speech), and your [LiveKit Cloud](https://cloud.livekit.io/) project credentials (URL, API key, and secret). The client also needs a `.env.local` with the same LiveKit credentials plus the Cerebras key for post-meeting notes generation.
+
+</codefocussection>
+
+### ❸ Import libraries and load environment
+
+<codefocussection filepath="server/meeting_notes.py" filerange="1-15" title="Import libraries and load environment" themeColor="#0000FF" label="Server">
+
+Import the LiveKit Agents SDK along with plugins for each service: AssemblyAI for speech-to-text, OpenAI-compatible client for Cerebras LLM, Rime for text-to-speech, and Silero for voice activity detection. `load_dotenv()` pulls API keys from your `.env` file.
+
+</codefocussection>
+
+### ❹ Define meeting keyterms
+
+<codefocussection filepath="server/meeting_notes.py" filerange="17-31" title="Define meeting keyterms" themeColor="#0000FF" label="Server">
+
+Define keyterms that AssemblyAI's Universal-3 Pro will use to boost recognition accuracy for meeting-specific vocabulary. These cover common meeting terms (action items, deliverables, quarterly review, roadmap) plus product names. U3P's `keyterms_prompt` appends these to its built-in default prompt, improving transcription of domain-specific vocabulary without replacing the optimized turn-detection behavior.
+
+</codefocussection>
+
+### ❺ Define the meeting facilitator persona
+
+<codefocussection filepath="server/meeting_notes.py" filerange="33-53" title="Define the meeting facilitator persona" themeColor="#0000FF" label="Server">
+
+The `SYSTEM_INSTRUCTIONS` string defines the AI's personality for the LLM — a meeting facilitator that summarizes discussion points, asks clarifying questions, flags action items, and keeps responses concise for voice delivery.
+
+The `MeetingFacilitator` class extends LiveKit's `Agent` base class and passes these instructions to the parent constructor.
+
+</codefocussection>
+
+### ❻ Configure STT, LLM, TTS, and start the session
+
+<codefocussection filepath="server/meeting_notes.py" filerange="56-91" title="Configure and start the agent session" themeColor="#0000FF" label="Server">
+
+The `entrypoint` function is the core of the agent. After connecting to the LiveKit room, it sets up each component:
+
+**STT (AssemblyAI U3P):** Configured with meeting-balanced turn detection — `min_end_of_turn_silence_when_confident=560` waits 560ms after detecting terminal punctuation before ending a turn, and `max_turn_silence=2000` forces a turn end after 2 seconds. These relaxed thresholds (vs. the 100ms/1200ms used in voice agents) avoid cutting off speakers mid-thought during longer meeting discussions.
+
+**LLM (Cerebras):** Uses `llama3.1-8b` via the OpenAI-compatible API wrapper with a temperature of 0.7 for natural-sounding responses.
+
+**TTS (Rime):** The `mistv2` model with the `astra` speaker voice. `reduce_latency=True` prioritizes fast first-byte delivery.
+
+**Turn detection:** Set to `"stt"` so AssemblyAI's punctuation-based turn detection drives the conversation flow instead of relying solely on VAD silence thresholds.
+
+After starting the session, `generate_reply()` makes the AI introduce itself as a meeting facilitator and ask about the agenda — so the AI speaks first when a participant joins.
+
+</codefocussection>
+
+### ❼ Generate LiveKit room tokens
+
+<codefocussection filepath="client/src/app/api/token/route.ts" filerange="1-37" title="Token API route" themeColor="#0000FF" label="Client">
+
+This API route generates a LiveKit access token when the user clicks "Start Meeting." It creates a unique room name and participant identity, then grants `canPublish: true` so the participant can share both audio and video. The room name uses the `meeting-notes-room-` prefix so the LiveKit agent can match and join.
+
+</codefocussection>
+
+### ❽ Generate meeting notes from transcript
+
+<codefocussection filepath="client/src/app/api/notes/route.ts" filerange="1-85" title="Notes generation API route" themeColor="#0000FF" label="Client">
+
+When the user clicks "End Meeting," the client sends the accumulated transcript to this API route. It calls the Cerebras LLM with a structured prompt that asks for a JSON response containing a summary, key points, decisions, and action items. The route includes fallback JSON parsing in case the LLM wraps the response in extra text. Since the transcript includes speaker labels (`User:` and `AI Notetaker:` prefixes), the LLM can distinguish who said what.
+
+</codefocussection>
+
+### ❾ Build the Zoom-inspired meeting UI
+
+<codefocussection filepath="client/src/app/page.tsx" filerange="118-466" title="Video meeting layout with transcript" themeColor="#0000FF" label="Client">
+
+The client connects to LiveKit with both `audio={true}` and `video={true}`, enabling the user's webcam alongside their microphone. `RoomAudioRenderer` ensures the user hears the AI's voice. The `MeetingView` component creates the Zoom-inspired layout:
+
+**Video grid:** Two tiles side-by-side — the user's webcam (via `VideoTrack`) and the AI notetaker represented by an animated cloud orb whose glow and scale react to the agent's audio level.
+
+**Live caption bar:** Shows the most recent transcription line in a Zoom-style closed-captions overlay with color-coded speaker labels.
+
+**Transcript panel:** A scrolling log of all finalized messages from both the user and AI, sorted chronologically. The `buildConversation` helper merges `agentTranscriptions` (from `useVoiceAssistant()`) and `userSegments` (from `useTrackTranscription()`) into a single timeline.
+
+**Control bar:** Mic toggle, camera toggle, and "End Meeting" button using `localParticipant.setMicrophoneEnabled()` / `setCameraEnabled()` from the LiveKit SDK.
+
+</codefocussection>
+
+### ❿ Run the app
+
+Start the server and client in separate terminals:
+
+```bash
+# Terminal 1 — Python agent
+cd server
+python meeting_notes.py dev
+```
+
+```bash
+# Terminal 2 — Next.js client
+cd client
+npm install && npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000), click **Start Meeting**, and grant camera/microphone permissions. The AI facilitator will introduce itself and ask about the agenda. Speak naturally — the transcript updates in real-time with speaker labels. Click **End Meeting** to generate structured notes with a summary, key points, decisions, and action items.
