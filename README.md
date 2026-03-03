@@ -32,7 +32,7 @@ Meetings have longer pauses than conversations, so turn detection is relaxed:
 
 | Parameter | Value | Why |
 |---|---|---|
-| `min_end_of_turn_silence_when_confident` | 560ms | Allow natural pauses before checking for punctuation |
+| `min_turn_silence` | 560ms | Allow natural pauses before checking for punctuation |
 | `max_turn_silence` | 2000ms | Speakers pause to think — avoid cutting off mid-thought |
 | `keyterms_prompt` | Meeting vocabulary | Boost recognition of project names, action items, etc. |
 

@@ -59,7 +59,7 @@ The `MeetingFacilitator` class extends LiveKit's `Agent` base class and passes t
 
 The `entrypoint` function is the core of the agent. After connecting to the LiveKit room, it sets up each component:
 
-**STT (AssemblyAI U3P):** Configured with meeting-balanced turn detection — `min_end_of_turn_silence_when_confident=560` waits 560ms after detecting terminal punctuation before ending a turn, and `max_turn_silence=2000` forces a turn end after 2 seconds. These relaxed thresholds (vs. the 100ms/1200ms used in voice agents) avoid cutting off speakers mid-thought during longer meeting discussions.
+**STT (AssemblyAI U3P):** Configured with meeting-balanced turn detection — `min_turn_silence=560` waits 560ms after detecting terminal punctuation before ending a turn, and `max_turn_silence=2000` forces a turn end after 2 seconds. These relaxed thresholds (vs. the 100ms/1200ms used in voice agents) avoid cutting off speakers mid-thought during longer meeting discussions.
 
 **LLM (Cerebras):** Uses `llama3.1-8b` via the OpenAI-compatible API wrapper with a temperature of 0.7 for natural-sounding responses.
 
