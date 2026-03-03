@@ -58,6 +58,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     session = AgentSession(
         stt=assemblyai.STT(
+            model="u3-rt-pro",
             min_turn_silence=560,
             max_turn_silence=2000,
             keyterms_prompt=KEYTERMS,
