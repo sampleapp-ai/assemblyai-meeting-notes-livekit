@@ -3,10 +3,12 @@ import logging
 from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import AgentSession, Agent
+from livekit.agents.voice.room_io import RoomOptions, AudioInputOptions
 from livekit.plugins import (
     openai,
     rime,
     assemblyai,
+    noise_cancellation,
     silero,
 )
 
@@ -59,8 +61,9 @@ async def entrypoint(ctx: agents.JobContext):
     session = AgentSession(
         stt=assemblyai.STT(
             model="u3-rt-pro",
-            min_turn_silence=100,
-            max_turn_silence=1000,
+            end_of_turn_confidence_threshold=0.4,
+            min_turn_silence=400,
+            max_turn_silence=1280,
             vad_threshold=0.3,
             keyterms_prompt=KEYTERMS,
         ),
@@ -78,12 +81,16 @@ async def entrypoint(ctx: agents.JobContext):
             activation_threshold=0.3,
         ),
         turn_detection="stt",
-        min_endpointing_delay=0,
     )
 
     await session.start(
         room=ctx.room,
         agent=MeetingFacilitator(),
+        room_options=RoomOptions(
+            audio_input=AudioInputOptions(
+                noise_cancellation=noise_cancellation.BVC(),
+            ),
+        ),
     )
 
     await session.generate_reply(

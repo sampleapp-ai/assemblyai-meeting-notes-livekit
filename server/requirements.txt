@@ -1,2 +1,3 @@
 livekit-agents[assemblyai,openai,silero,rime]
+livekit-plugins-noise-cancellation
 python-dotenv
