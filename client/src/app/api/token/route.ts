@@ -1,4 +1,4 @@
-import { AccessToken } from "livekit-server-sdk";
+import { AccessToken, RoomServiceClient } from "livekit-server-sdk";
 import { NextResponse } from "next/server";
 
 export async function POST() {
@@ -15,6 +15,14 @@ export async function POST() {
 
   const roomName = `meeting-notes-room-${Math.random().toString(36).slice(2, 8)}`;
   const participantName = `user-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Create room and dispatch agent before returning the token,
+  // so the agent starts booting while the client connects
+  const roomService = new RoomServiceClient(livekitUrl, apiKey, apiSecret);
+  await roomService.createRoom({
+    name: roomName,
+    agents: [{ agentName: "" }],
+  });
 
   const at = new AccessToken(apiKey, apiSecret, {
     identity: participantName,

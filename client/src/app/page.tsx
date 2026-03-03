@@ -9,7 +9,7 @@ import {
   useRoomContext,
   VideoTrack,
 } from "@livekit/components-react";
-import { Track, RoomEvent, type TranscriptionSegment as LKTranscriptionSegment } from "livekit-client";
+import { Track, RoomEvent, ParticipantKind, type TranscriptionSegment as LKTranscriptionSegment } from "livekit-client";
 
 type AppState = "idle" | "recording" | "generating" | "notes";
 
@@ -126,7 +126,7 @@ export default function Page() {
         onDisconnected={() => {}}
         className="flex flex-col min-h-screen"
       >
-        <MeetingView
+        <AgentGate
           transcriptRef={transcriptRef}
           onEndMeeting={endMeeting}
           startTime={startTimeRef.current}
@@ -150,6 +150,64 @@ export default function Page() {
   }
 
   return null;
+}
+
+// ── Wait for agent to join before showing the meeting UI ────
+
+function useAgentReady() {
+  const room = useRoomContext();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    for (const p of room.remoteParticipants.values()) {
+      if (p.kind === ParticipantKind.AGENT) {
+        setReady(true);
+        return;
+      }
+    }
+
+    const onParticipantConnected = (participant: any) => {
+      if (participant.kind === ParticipantKind.AGENT) {
+        setReady(true);
+      }
+    };
+
+    room.on(RoomEvent.ParticipantConnected, onParticipantConnected);
+    return () => {
+      room.off(RoomEvent.ParticipantConnected, onParticipantConnected);
+    };
+  }, [room]);
+
+  return ready;
+}
+
+function AgentGate({
+  transcriptRef,
+  onEndMeeting,
+  startTime,
+}: {
+  transcriptRef: React.RefObject<string>;
+  onEndMeeting: () => void;
+  startTime: number;
+}) {
+  const agentReady = useAgentReady();
+
+  if (!agentReady) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <div className="loading-spinner" />
+        <p className="text-zinc-400 text-sm">Connecting to AI notetaker...</p>
+      </div>
+    );
+  }
+
+  return (
+    <MeetingView
+      transcriptRef={transcriptRef}
+      onEndMeeting={onEndMeeting}
+      startTime={startTime}
+    />
+  );
 }
 
 // ── Audio level hook (reused from voice agent) ─────────────
